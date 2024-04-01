@@ -115,17 +115,25 @@ const resolvers = {
     allBooks: (root, args) => {
       if (args.author) {
         let authorBooks = books.filter((book) => book.author === args.author)
-        authorBooks = authorBooks.map((book) => {
-          return { title: book.title }
-        })
         return authorBooks
+      }
+      if (args.genre) {
+        let genreBooks = books.filter((book) => {
+          const decision = book.genres.map((el) => {
+            if (el === args.genre) return true
+            return false
+          })
+          //console.log(decision)
+          return decision.includes(true)
+        })
+        return genreBooks
       }
     },
     allAuthors: (root, args) => {
       const changedAuthors = authors.map((author) => {
         const changedBooks = books.filter((book) => book.author === author.name)
         return {
-          name: author.name,
+          ...author,
           bookCount: changedBooks.length,
         }
       })
