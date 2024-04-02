@@ -195,7 +195,17 @@ const resolvers = {
       return author
     },
     editAuthor: (root, args) => {
-      console.log(args)
+      const author = authors.find(
+        (author) => author.name.toLowerCase() === args.name.toLowerCase()
+      )
+      let updatedAuthor = { ...author, born: args.born }
+
+      authors = authors.map((author) =>
+        author.name.toLowerCase() === updatedAuthor.name.toLowerCase()
+          ? updatedAuthor
+          : author
+      )
+      return updatedAuthor
     },
   },
 }
