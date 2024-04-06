@@ -104,7 +104,7 @@ type Author{
   type Query {
     bookCount: Int
     authorCount:Int
-    allBooks(author:String genre:String="refactoring"):[Book!]!
+    allBooks(author:String genre:String):[Book!]!
     allAuthors:[Author!]!
   }
 
@@ -147,6 +147,7 @@ const resolvers = {
         })
         return genreBooks
       }
+      return books
     },
     allAuthors: (root, args) => {
       const changedAuthors = authors.map((author) => {
@@ -161,6 +162,8 @@ const resolvers = {
   },
   Mutation: {
     addBook: (root, args) => {
+      console.log(args);
+      
       if (
         books.find(
           (book) => book.title.toLowerCase() === args.title.toLowerCase()
