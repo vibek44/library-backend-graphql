@@ -18,6 +18,7 @@ type Author{
 }
 
 type Book{
+  id:ID!
   title:String!
   author:Author!
   published:Int!
