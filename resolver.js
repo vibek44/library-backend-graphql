@@ -1,144 +1,102 @@
-let authors = [
-  {
-    name: 'Robert Martin',
-    id: 'afa51ab0-344d-11e9-a414-719c6709cf3e',
-    born: 1952,
-  },
-  {
-    name: 'Martin Fowler',
-    id: 'afa5b6f0-344d-11e9-a414-719c6709cf3e',
-    born: 1963,
-  },
-  {
-    name: 'Fyodor Dostoevsky',
-    id: 'afa5b6f1-344d-11e9-a414-719c6709cf3e',
-    born: 1821,
-  },
-  {
-    name: 'Joshua Kerievsky', // birthyear not known
-    id: 'afa5b6f2-344d-11e9-a414-719c6709cf3e',
-  },
-  {
-    name: 'Sandi Metz', // birthyear not known
-    id: 'afa5b6f3-344d-11e9-a414-719c6709cf3e',
-  },
-]
+const User = require('./models/user')
+const Author = require('./models/author')
+const Book = require('./models/book')
+const { GraphQLError } = require('graphql')
+const jwt = require('jsonwebtoken')
 
-/*
- * It might make more sense to associate a book with its author by storing the author's id in the context of the book instead of the author's name
- * However, for simplicity, we will store the author's name in connection with the book
- */
-
-let books = [
-  {
-    title: 'Clean Code',
-    published: 2008,
-    author: 'Robert Martin',
-    id: 'afa5b6f4-344d-11e9-a414-719c6709cf3e',
-    genres: ['refactoring'],
-  },
-  {
-    title: 'Agile software development',
-    published: 2002,
-    author: 'Robert Martin',
-    id: 'afa5b6f5-344d-11e9-a414-719c6709cf3e',
-    genres: ['agile', 'patterns', 'design'],
-  },
-  {
-    title: 'Refactoring, edition 2',
-    published: 2018,
-    author: 'Martin Fowler',
-    id: 'afa5de00-344d-11e9-a414-719c6709cf3e',
-    genres: ['refactoring'],
-  },
-  {
-    title: 'Refactoring to patterns',
-    published: 2008,
-    author: 'Joshua Kerievsky',
-    id: 'afa5de01-344d-11e9-a414-719c6709cf3e',
-    genres: ['refactoring', 'patterns'],
-  },
-  {
-    title: 'Practical Object-Oriented Design, An Agile Primer Using Ruby',
-    published: 2012,
-    author: 'Sandi Metz',
-    id: 'afa5de02-344d-11e9-a414-719c6709cf3e',
-    genres: ['refactoring', 'design'],
-  },
-  {
-    title: 'Crime and punishment',
-    published: 1866,
-    author: 'Fyodor Dostoevsky',
-    id: 'afa5de03-344d-11e9-a414-719c6709cf3e',
-    genres: ['classic', 'crime'],
-  },
-  {
-    title: 'The Demon ',
-    published: 1872,
-    author: 'Fyodor Dostoevsky',
-    id: 'afa5de04-344d-11e9-a414-719c6709cf3e',
-    genres: ['classic', 'revolution'],
-  },
-]
-
-const  resolvers = {
+const resolvers = {
   Query: {
-    bookCount: () => books.length,
-    authorCount: () => authors.length,
-    allBooks: (root, args) => {
+    bookCount: async () => Book.collection.countDocuments(),
+    authorCount: async () => Author.collection.countDocuments(),
+    allBooks: async (root, args) => {
+      const books = await Book.find({}).populate('author')
       if (args.author) {
-        let authorBooks = books.filter((book) => book.author === args.author)
+        let authorBooks = books.filter(
+          (book) => book.author.name.toLowerCase() === args.author.toLowerCase()
+        )
         return authorBooks
       }
       if (args.genre) {
-        let genreBooks = books.filter((book) => {
-          const decision = book.genres.map((el) => {
-            if (el === args.genre) return true
-            return false
-          })
-          //console.log(decision)
-          return decision.includes(true)
-        })
+        let genreBooks = await Book.find({
+          //genres: args.genre,
+          genres: { $in: [args.genre] },
+        }).populate('author')
         return genreBooks
       }
       return books
     },
-    allAuthors: (root, args) => {
-      const changedAuthors = authors.map((author) => {
-        const changedBooks = books.filter((book) => book.author === author.name)
-        return {
-          ...author,
-          bookCount: changedBooks.length,
-        }
-      })
-      return changedAuthors
+    allAuthors: async (root, args) => Author.find({}),
+    me: async (root, args, context) => {
+      return context.currentUser
     },
   },
   Mutation: {
-    addBook: (root, args) => { 
-      if (
-        books.find(
-          (book) => book.title.toLowerCase() === args.title.toLowerCase()
-        )
-      ) {
-        throw new GraphQLError('Title must be unique', {
+    createUser: async (root, args) => {
+      let isUser = await User.find({ username: args.username })
+      if (isUser && isUser.length > 0) {
+        throw new GraphQLError('username must be unique', {
           extensions: {
-            code: 'BAD_TITLE_INPUT',
-            invalidArgs: args.title,
+            code: 'NAME_MUST_BE_UNIQUEE',
           },
         })
       }
-    if(!authors.find(author=>author.name.toLowerCase()===args.author.toLowerCase())){
-      const author={name:args.author,id:uuid()}
-      authors=authors.concat(author)
-     console.log(author);
-     
-    }
-      const book = { ...args, id: uuid() }
-      books = books.concat(book)
-      return book
+      const user = new User({ ...args })
+      return user.save().catch((error) => {
+        throw new GraphQLError('user save failed', {
+          extensions: {
+            code: 'USER_SAVE_FAILED',
+            error,
+          },
+        })
+      })
+    },
+    login: async (root, args) => {
+      const isUser = await User.find({ username: args.username })
+      if (isUser.length === 0 || args.password !== 'User123') {
+        throw new GraphQLError('wrong credential', {
+          extensions: {
+            code: 'WRONG_USER_CREDENTIALS',
+          },
+        })
+      }
+      const userToken = {
+        username: isUser[0].username,
+        id: isUser[0]._id,
+      }
+      return { value: jwt.sign(userToken, process.env.JWT_SEKRET) }
+    },
+    addBook: async (root, args, context) => {
+      if (!context.currentUser) {
+        throw new GraphQLError('permission not allowed', {
+          extensions: {
+            code: 'USER_NOT_ALLOWED',
+          },
+        })
+      }
+      const author = new Author({ name: args.author })
+      const authors = await Author.find({})
+      const authorResult = authors.find(
+        (a) => a.name.toLowerCase() === args.author.toLowerCase()
+      )
+      if (args.title.length < 5 || args.author.length < 5) {
+        throw new GraphQLError('title or author name is too short', {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+          },
+        })
+      }
+      if (!authorResult) {
+        const savedAuthor = await author.save()
+        const book = new Book({ ...args, author: savedAuthor._id })
+        return book.save()
+      }
+      if (authorResult) {
+        const book = new Book({ ...args, author: authorResult._id })
+        return book.save()
+      }
     },
     addAuthor: (root, args) => {
+      const authors = Author.find({})
       if (
         authors.find(
           (author) => author.name.toLowerCase() === args.name.toLowerCase()
@@ -155,22 +113,43 @@ const  resolvers = {
       authors = authors.concat(author)
       return author
     },
-    editAuthor: (root, args) => {
-      
+    editAuthor: async (root, args, context) => {
+      if (!context.currentUser) {
+        throw new GraphQLError('permission not allowed', {
+          extensions: {
+            code: 'USER_NOT_ALLOWED',
+          },
+        })
+      }
+      //const author = await Author.find({ name: args.name })
+      const authors = await Author.find({})
       const author = authors.find(
         (author) => author.name.toLowerCase() === args.name.toLowerCase()
       )
-      if(!author)return null
-      let updatedAuthor = { ...author, born: args.born }
-
-      authors = authors.map((author) =>
-        author.name.toLowerCase() === updatedAuthor.name.toLowerCase()
-          ? updatedAuthor
-          : author
+      if (!author) return null
+      let updatedAuthor = {
+        _id: author._id,
+        name: author.name,
+        born: args.born,
+      }
+      updatedAuthor = await Author.findByIdAndUpdate(
+        author._id,
+        updatedAuthor,
+        {
+          new: true,
+        }
       )
+      console.log(updatedAuthor)
+
       return updatedAuthor
+    },
+  },
+  Author: {
+    bookCount: async (root) => {
+      const books = await Book.find({ author: { $eq: root._id } })
+      return books.length
     },
   },
 }
 
-module.exports=resolvers
+module.exports = resolvers
