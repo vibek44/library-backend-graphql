@@ -1,0 +1,5 @@
+-this is backend for library project.
+-it uses apollo/server to create server.
+-resolver for respective query and mutation has been created
+-graphql type Object, query,mutation is mainly used.(Enum interface type is yet not used)
+-schema and respective models are created to communicate with mongodb
