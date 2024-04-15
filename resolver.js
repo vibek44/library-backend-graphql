@@ -25,9 +25,9 @@ const resolvers = {
       }
       return books
     },
-    allAuthors: async (root, args) => Author.find({}),
+    allAuthors: async (root, args) => await Author.find({}),
     me: async (root, args, context) => {
-      return context.currentUser
+      if (context.currentUser) return context.currentUser
     },
   },
   Mutation: {
