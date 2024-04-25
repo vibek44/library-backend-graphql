@@ -3,3 +3,4 @@
 -resolver for respective query and mutation has been created
 -graphql type Object, query,mutation is mainly used.(Enum interface type is yet not used)
 -schema and respective models are created to communicate with mongodb
+-to facilitate the subscription to the app, ws,graphql-ws,package is used to create web socket connection
