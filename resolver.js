@@ -2,6 +2,8 @@ const User = require('./models/user')
 const Author = require('./models/author')
 const Book = require('./models/book')
 const { GraphQLError } = require('graphql')
+const  { PubSub } = require('graphql-subscriptions')
+const pubsub=new PubSub()
 const jwt = require('jsonwebtoken')
 
 const resolvers = {
@@ -9,6 +11,7 @@ const resolvers = {
     bookCount: async () => Book.collection.countDocuments(),
     authorCount: async () => Author.collection.countDocuments(),
     allBooks: async (root, args) => {
+      
       const books = await Book.find({}).populate('author')
       if (args.author) {
         let authorBooks = books.filter(
@@ -17,15 +20,20 @@ const resolvers = {
         return authorBooks
       }
       if (args.genre) {
+        //console.log('genre');
+         //genres: args.genre,
         let genreBooks = await Book.find({
-          //genres: args.genre,
           genres: { $in: [args.genre] },
         }).populate('author')
         return genreBooks
       }
       return books
     },
-    allAuthors: async (root, args) => await Author.find({}),
+    allAuthors: async (root, args) => {
+      let authors=await Author.find({})
+      console.log('Author.find')
+      return authors
+    },
     me: async (root, args, context) => {
       if (context.currentUser) return context.currentUser
     },
@@ -66,6 +74,7 @@ const resolvers = {
       return { value: jwt.sign(userToken, process.env.JWT_SEKRET) }
     },
     addBook: async (root, args, context) => {
+      //console.log(context.currentUser);
       if (!context.currentUser) {
         throw new GraphQLError('permission not allowed', {
           extensions: {
@@ -73,6 +82,8 @@ const resolvers = {
           },
         })
       }
+     // console.log(context.currentUser);
+      
       const author = new Author({ name: args.author })
       const authors = await Author.find({})
       const authorResult = authors.find(
@@ -87,16 +98,23 @@ const resolvers = {
       }
       if (!authorResult) {
         const savedAuthor = await author.save()
-        const book = new Book({ ...args, author: savedAuthor._id })
-        return book.save()
+        let book = new Book({ ...args, author: savedAuthor._id })
+        book=await  book.save()
+        book={id:book._id,title:book.title,published:book.published,author:savedAuthor,genres:book.genres}
+        pubsub.publish('BOOK_ADDED', { bookAdded:book })
+        return book
+
       }
       if (authorResult) {
-        const book = new Book({ ...args, author: authorResult._id })
-        return book.save()
+        let book = new Book({ ...args, author: authorResult._id })
+        book=await book.save()
+        book={id:book._id,title:book.title,published:book.published,author:authorResult,genres:book.genres}
+        pubsub.publish('BOOK_ADDED', { bookAdded:book })
+        return book
       }
     },
-    addAuthor: (root, args) => {
-      const authors = Author.find({})
+    addAuthor: async(root, args) => {
+      const authors = await Author.find({})
       if (
         authors.find(
           (author) => author.name.toLowerCase() === args.name.toLowerCase()
@@ -144,9 +162,17 @@ const resolvers = {
       return updatedAuthor
     },
   },
+  Subscription:{
+    bookAdded:{
+     subscribe:()=>pubsub.asyncIterator('BOOK_ADDED')
+    }
+   },
   Author: {
+    //this field resolver of Author type may lead to (n+1) problems //to solve it database for author field bookCount can be added 
     bookCount: async (root) => {
       const books = await Book.find({ author: { $eq: root._id } })
+      console.log('Book.find');
+      
       return books.length
     },
   },
